@@ -180,10 +180,12 @@ function copyAllTargets() {
 }
 
 async function getSmartNeed(subreddit) {
-    const proxy = 'https://api.allorigins.win/get?url=';
+    const proxyBase = 'https://api.allorigins.win/get?url=';  // Reliable in 2025
+    // Alternatives if needed: 'https://corsproxy.io/?' or 'https://api.codetabs.com/v1/proxy?quest='
+
     const urls = [
-        `${proxy}${encodeURIComponent('https://www.reddit.com/r/' + subreddit + '/hot/.json?limit=25&raw_json=1')}`,
-        `${proxy}${encodeURIComponent('https://old.reddit.com/r/' + subreddit + '/hot/.json?limit=25')}`
+        `${proxyBase}${encodeURIComponent('https://www.reddit.com/r/' + subreddit + '/hot/.json?limit=25&raw_json=1')}`,
+        `${proxyBase}${encodeURIComponent('https://old.reddit.com/r/' + subreddit + '/hot/.json?limit=25')}`
     ];
 
     for (const url of urls) {
@@ -191,14 +193,16 @@ async function getSmartNeed(subreddit) {
             const res = await fetch(url);
             if (res.ok) {
                 const proxyData = await res.json();
-                const data = JSON.parse(proxyData.contents);
+                const data = JSON.parse(proxyData.contents);  // Reddit JSON is inside "contents"
                 return processHotData(data);
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error(e);  // Optional: for debugging
+        }
     }
 
     return {
-        topHTML: "<em>Failed to load (try again later or check subreddit)</em>",
+        topHTML: "<em>Failed to load hot posts (try another proxy or later)</em>",
         needHTML: "Error",
         error: true
     };
