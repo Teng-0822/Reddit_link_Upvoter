@@ -180,23 +180,25 @@ function copyAllTargets() {
 }
 
 async function getSmartNeed(subreddit) {
-    const endpoints = [
-        `https://www.reddit.com/r/${subreddit}/hot/.json?limit=25&raw_json=1`,
-        `https://old.reddit.com/r/${subreddit}/hot/.json?limit=25`
+    const proxy = 'https://api.allorigins.win/get?url=';
+    const urls = [
+        `${proxy}${encodeURIComponent('https://www.reddit.com/r/' + subreddit + '/hot/.json?limit=25&raw_json=1')}`,
+        `${proxy}${encodeURIComponent('https://old.reddit.com/r/' + subreddit + '/hot/.json?limit=25')}`
     ];
 
-    for (const url of endpoints) {
+    for (const url of urls) {
         try {
             const res = await fetch(url);
             if (res.ok) {
-                const data = await res.json();
+                const proxyData = await res.json();
+                const data = JSON.parse(proxyData.contents);
                 return processHotData(data);
             }
         } catch (e) {}
     }
 
     return {
-        topHTML: "<em>Failed to load (private, restricted, or blocked)</em>",
+        topHTML: "<em>Failed to load (try again later or check subreddit)</em>",
         needHTML: "Error",
         error: true
     };
