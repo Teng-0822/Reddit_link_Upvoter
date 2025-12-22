@@ -180,29 +180,32 @@ function copyAllTargets() {
 }
 
 async function getSmartNeed(subreddit) {
-    const proxyBase = 'https://api.allorigins.win/get?url=';  // Reliable in 2025
-    // Alternatives if needed: 'https://corsproxy.io/?' or 'https://api.codetabs.com/v1/proxy?quest='
-
-    const urls = [
-        `${proxyBase}${encodeURIComponent('https://www.reddit.com/r/' + subreddit + '/hot/.json?limit=25&raw_json=1')}`,
-        `${proxyBase}${encodeURIComponent('https://old.reddit.com/r/' + subreddit + '/hot/.json?limit=25')}`
+    const proxies = [
+        'https://api.codetabs.com/v1/proxy?quest=',  // Often works great for JSON, no encoding issues
+        'https://corsproxy.io/?',                    // Popular, text/JSON focused
+        'https://cors.x2u.in/'                       // Newer one from 2025, good for many users
     ];
 
-    for (const url of urls) {
-        try {
-            const res = await fetch(url);
-            if (res.ok) {
-                const proxyData = await res.json();
-                const data = JSON.parse(proxyData.contents);  // Reddit JSON is inside "contents"
-                return processHotData(data);
-            }
-        } catch (e) {
-            console.error(e);  // Optional: for debugging
+    const baseUrls = [
+        `https://www.reddit.com/r/${subreddit}/hot/.json?limit=25&raw_json=1`,
+        `https://old.reddit.com/r/${subreddit}/hot/.json?limit=25`
+    ];
+
+    for (const proxy of proxies) {
+        for (const base of baseUrls) {
+            try {
+                const url = proxy + encodeURIComponent(base);
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    return processHotData(data);
+                }
+            } catch (e) {}
         }
     }
 
     return {
-        topHTML: "<em>Failed to load hot posts (try another proxy or later)</em>",
+        topHTML: "<em>Failed — try again later or Reddit blocking</em>",
         needHTML: "Error",
         error: true
     };
