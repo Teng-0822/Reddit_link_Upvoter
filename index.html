@@ -611,45 +611,61 @@ function processHotData(data) {
     }
 
     const now = Date.now() / 1000;
-    const TWENTY_HOURS = 20 * 60 * 60;
-    let targetPost = null;
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60; // 24 hours in seconds
 
-    for (const post of hotPosts) {
+    // Find the first post that is NOT exploding (>200 upvotes AND <24h old)
+    let targetPost = hotPosts.find(post => {
         const age = now - post.created_utc;
-        const isExploding = post.score > 200 && age < TWENTY_HOURS;
-        if (!isExploding) {
-            targetPost = post;
-            break;
-        }
+        const isExploding = post.score > 200 && age < TWENTY_FOUR_HOURS;
+        return !isExploding;
+    });
+
+    // If ALL top posts are exploding (rare, but possible in very hot subs), fall back to the lowest one
+    if (!targetPost) {
+        targetPost = hotPosts.reduce((lowest, post) => 
+            post.score < lowest.score ? post : lowest
+        , hotPosts[0]);
+        // You could add a note like "(all posts exploding!)" if you want
     }
-    if (!targetPost) targetPost = hotPosts[0];
 
     let needed = targetPost.score + 1;
 
     const top5 = hotPosts.slice(0, 5);
+    const topHTML = makeTopList(top5);
 
+    // Special case: very low-traffic subs
     if (needed <= 10) {
         return {
-            topHTML: makeTopList(top5),
+            topHTML,
             needHTML: "<strong>10 upvotes</strong>",
             neededForCopy: 10
         };
     }
 
+    // Round up to nearest 5 for clean numbers (e.g. 142 → 145)
     needed = Math.max(10, Math.ceil(needed / 5) * 5);
 
     return {
-        topHTML: makeTopList(top5),
-        needHTML: `<strong>${needed.toLocaleString()} upvotes</strong>`,
+        topHTML,
+        needHTML: `<strong>${needed.toLocaleString()} upvotes</strong> to reach front page`,
         neededForCopy: needed
     };
 }
 
 function makeTopList(posts) {
+    const now = Date.now() / 1000;
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60;
+
     let html = '<ol class="top-list">';
     posts.forEach(p => {
+        const age = timeAgo(p.created_utc);
+        const ageInSec = now - p.created_utc;
+        const explodingTag = (p.score > 200 && ageInSec < TWENTY_FOUR_HOURS)
+            ? ' <span style="color:#ff9500;font-weight:700;">(exploding)</span>'
+            : '';
+
         html += `<li><a href="https://www.reddit.com${p.permalink}" target="_blank">${p.title}</a>
-                 <span style="color:#64748b;font-size:0.9em;"> — ${p.score.toLocaleString()} upvotes • ${timeAgo(p.created_utc)}</span></li>`;
+                 <span style="color:#64748b;font-size:0.9em;"> — ${p.score.toLocaleString()} upvotes • ${age}${explodingTag}</span></li>`;
     });
     html += '</ol>';
     return html;
