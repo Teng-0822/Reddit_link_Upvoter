@@ -648,18 +648,28 @@ function processHotData(data) {
 function makeTopList(posts) {
     let html = '<ol class="top-list">';
     posts.forEach(p => {
-        html += `<li><a href="https://www.reddit.com${p.permalink}" target="_blank">${p.title}</a>
-                 <span style="color:#64748b;font-size:0.9em;"> — ${p.score.toLocaleString()} upvotes • ${timeAgo(p.created_utc)}</span></li>`;
+        const age = timeAgo(p.created_utc);
+        
+        // Check if post is "hot": 200+ upvotes AND less than 24 hours old
+        const isHot = p.score > 200 && (Date.now() / 1000 - p.created_utc) < 24 * 3600;
+        const hotTag = isHot ? ' <span style="color:#ff4500; font-weight:bold;">(exploding)</span>' : '';
+
+        html += `<li>
+                    <a href="https://www.reddit.com${p.permalink}" target="_blank">${p.title}</a>
+                    <span style="color:#64748b; font-size:0.9em;">
+                        — ${p.score.toLocaleString()} upvotes • ${age}${hotTag}
+                    </span>
+                 </li>`;
     });
     html += '</ol>';
     return html;
 }
 
 function timeAgo(ts) {
-    const diff = (Date.now()/1000) - ts;
-    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
-    return `${Math.floor(diff/86400)}d ago`;
+    const diff = (Date.now() / 1000) - ts;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
 }
 </script>
 </body>
