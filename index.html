@@ -503,7 +503,7 @@ async function loadPosts() {
                 </div>
                 <div class="actions-group">
                     <div class="need" id="need-${uniqueKey}">Calculating…</div>
-                    <button class="copy-btn">Copy short link</button>
+                    <button class="copy-btn">link</button>
                 </div>
             </div>
             <div class="dropdown">
@@ -637,7 +637,7 @@ function processHotData(data) {
     if (needed <= 10) {
         return {
             topHTML,
-            needHTML: "<strong>10 upvotes</strong>",
+            needHTML: "<strong>10 up</strong>",
             neededForCopy: 10
         };
     }
@@ -647,7 +647,7 @@ function processHotData(data) {
 
     return {
         topHTML,
-        needHTML: `<strong>${needed.toLocaleString()} upvotes</strong> to reach front page`,
+        needHTML: `<strong>${needed.toLocaleString()} up</strong>`,
         neededForCopy: needed
     };
 }
