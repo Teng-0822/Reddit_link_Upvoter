@@ -518,7 +518,7 @@ async function loadPosts() {
             const b = e.target;
             b.textContent = 'Copied!';
             b.classList.add('copied');
-            setTimeout(() => { b.textContent = 'Copy short link'; b.classList.remove('copied'); }, 2000);
+            setTimeout(() => { b.textContent = 'link'; b.classList.remove('copied'); }, 2000);
         };
 
         container.appendChild(div);
