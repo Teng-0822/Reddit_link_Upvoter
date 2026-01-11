@@ -119,6 +119,39 @@
             color: #64748b;
         }
         
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            background: rgba(30, 41, 59, 0.4);
+            border-radius: 12px;
+            border: 2px solid rgba(255, 69, 0, 0.3);
+        }
+        
+        .checkbox-container input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--reddit);
+        }
+        
+        .checkbox-container label {
+            color: #fbbf24;
+            font-weight: 700;
+            font-size: 1.05em;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .checkbox-container .checkbox-desc {
+            color: #94a3b8;
+            font-size: 0.9em;
+            margin-left: auto;
+            font-style: italic;
+        }
+        
         .button-group {
             display: flex;
             gap: 12px;
@@ -293,6 +326,15 @@
             box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
         }
         
+        .need.forced {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            box-shadow: 0 4px 15px rgba(251, 191, 36, 0.4);
+        }
+        
+        .need.forced:hover {
+            box-shadow: 0 6px 20px rgba(251, 191, 36, 0.5);
+        }
+        
         .need.error {
             background: linear-gradient(135deg, #dc2626, #b91c1c);
             cursor: default;
@@ -413,6 +455,8 @@
             .search-card { padding: 25px; }
             .main-line { flex-direction: column; }
             .actions-group { width: 100%; }
+            .checkbox-container { flex-direction: column; align-items: flex-start; }
+            .checkbox-container .checkbox-desc { margin-left: 0; margin-top: 5px; }
         }
     </style>
 </head>
@@ -431,6 +475,13 @@ https://www.reddit.com/r/dressedhot/s/KWxuPi89Du
 https://reddit.com/r/sub/s/abc123
 
 Works with full links too!" autofocus></textarea>
+        
+        <div class="checkbox-container">
+            <input type="checkbox" id="forceMode" name="forceMode">
+            <label for="forceMode">Force Top #1</label>
+            <span class="checkbox-desc">Ignores rules • Beats current #1 + extra buffer</span>
+        </div>
+        
         <div class="button-group">
             <button class="load" onclick="loadPosts()">Calculate Targets</button>
             <button class="copyall" id="copyAllBtn" onclick="copyAllTargets()">Copy All Targets</button>
@@ -465,16 +516,18 @@ async function loadPosts() {
     const status = document.getElementById('status');
     const container = document.getElementById('posts');
     const copyAllBtn = document.getElementById('copyAllBtn');
+    const forceMode = document.getElementById('forceMode').checked;
+    
     container.innerHTML = '';
     allNeededNumbers.length = 0;
     copyAllBtn.style.display = 'none';
-    status.textContent = `Processing ${urls.length} link(s)…`;
+    status.textContent = `Processing ${urls.length} link(s)${forceMode ? ' (FORCE MODE)' : ''}…`;
     const cache = new Map();
     let loaded = 0;
 
     for (let i = 0; i < urls.length; i++) {
         const originalUrl = urls[i];
-        status.textContent = `Processing ${i+1}/${urls.length}…`;
+        status.textContent = `Processing ${i+1}/${urls.length}${forceMode ? ' (FORCE MODE)' : ''}…`;
         const subreddit = extractSubreddit(originalUrl);
 
         if (!subreddit) {
@@ -499,10 +552,10 @@ async function loadPosts() {
                     <span class="title-link">/r/${subreddit} short link</span>
                     <div class="meta">Your original link</div>
                     <div class="full-url">Short link: <a href="${originalUrl}" target="_blank">${originalUrl}</a></div>
-                    <div class="short-note">Target calculated from current hot posts in /r/${subreddit}</div>
+                    <div class="short-note">Target calculated from current hot posts in /r/${subreddit}${forceMode ? ' • FORCE MODE ACTIVE' : ''}</div>
                 </div>
                 <div class="actions-group">
-                    <div class="need" id="need-${uniqueKey}">Calculating…</div>
+                    <div class="need ${forceMode ? 'forced' : ''}" id="need-${uniqueKey}">Calculating…</div>
                     <button class="copy-btn">link</button>
                 </div>
             </div>
@@ -524,10 +577,11 @@ async function loadPosts() {
         container.appendChild(div);
         loaded++;
 
-        if (!cache.has(subreddit)) {
-            cache.set(subreddit, getSmartNeed(subreddit));
+        const cacheKey = `${subreddit}-${forceMode}`;
+        if (!cache.has(cacheKey)) {
+            cache.set(cacheKey, getSmartNeed(subreddit, forceMode));
         }
-        const result = await cache.get(subreddit);
+        const result = await cache.get(cacheKey);
 
         document.getElementById(`top-${uniqueKey}`).innerHTML = result.topHTML;
         const needEl = document.getElementById(`need-${uniqueKey}`);
@@ -554,7 +608,7 @@ async function loadPosts() {
         copyAllBtn.style.display = 'inline-block';
     }
 
-    status.textContent = `Done — ${loaded} link(s) processed`;
+    status.textContent = `Done — ${loaded} link(s) processed${forceMode ? ' (FORCE MODE)' : ''}`;
 }
 
 function copyAllTargets() {
@@ -569,7 +623,7 @@ function copyAllTargets() {
     });
 }
 
-async function getSmartNeed(subreddit) {
+async function getSmartNeed(subreddit, forceMode = false) {
     const proxies = [
         'https://api.codetabs.com/v1/proxy?quest=',
         'https://corsproxy.io/?',
@@ -588,7 +642,7 @@ async function getSmartNeed(subreddit) {
                 const res = await fetch(url);
                 if (res.ok) {
                     const data = await res.json();
-                    return processHotData(data);
+                    return processHotData(data, forceMode);
                 }
             } catch (e) {}
         }
@@ -601,7 +655,7 @@ async function getSmartNeed(subreddit) {
     };
 }
 
-function processHotData(data) {
+function processHotData(data, forceMode = false) {
     let hotPosts = data.data.children
         .filter(c => !c.data.stickied && c.kind === 't3')
         .map(c => c.data);
@@ -610,30 +664,43 @@ function processHotData(data) {
         return { topHTML: "<em>No visible posts</em>", needHTML: "N/A" };
     }
 
-    const now = Date.now() / 1000;
-    const TWENTY_FOUR_HOURS = 24 * 60 * 60; // 24 hours in seconds
+    const top5 = hotPosts.slice(0, 5);
+    const topHTML = makeTopList(top5);
 
-    // Find the first post that is NOT exploding (>200 upvotes AND <24h old)
+    // FORCE MODE: Beat the #1 post + add buffer for longevity
+    if (forceMode) {
+        const topPost = hotPosts[0];
+        // Beat #1 by a margin + add 20% buffer to stay on top longer
+        let needed = Math.ceil(topPost.score * 1.2) + 50;
+        
+        // Round up to nearest 10 for clean numbers
+        needed = Math.ceil(needed / 10) * 10;
+        
+        return {
+            topHTML,
+            needHTML: `<strong>${needed.toLocaleString()} up</strong> <span style="color:#fbbf24;">(FORCED)</span>`,
+            neededForCopy: needed
+        };
+    }
+
+    // NORMAL MODE: Original logic
+    const now = Date.now() / 1000;
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60;
+
     let targetPost = hotPosts.find(post => {
         const age = now - post.created_utc;
         const isExploding = post.score > 200 && age < TWENTY_FOUR_HOURS;
         return !isExploding;
     });
 
-    // If ALL top posts are exploding (rare, but possible in very hot subs), fall back to the lowest one
     if (!targetPost) {
         targetPost = hotPosts.reduce((lowest, post) => 
             post.score < lowest.score ? post : lowest
         , hotPosts[0]);
-        // You could add a note like "(all posts exploding!)" if you want
     }
 
     let needed = targetPost.score + 1;
 
-    const top5 = hotPosts.slice(0, 5);
-    const topHTML = makeTopList(top5);
-
-    // Special case: very low-traffic subs
     if (needed <= 10) {
         return {
             topHTML,
@@ -642,7 +709,6 @@ function processHotData(data) {
         };
     }
 
-    // Round up to nearest 5 for clean numbers (e.g. 142 → 145)
     needed = Math.max(10, Math.ceil(needed / 5) * 5);
 
     return {
