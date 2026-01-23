@@ -503,10 +503,54 @@ Works with full links too!" autofocus></textarea>
 <script>
 const allNeededNumbers = [];
 
+// FIXED: Better subreddit extraction that handles more URL formats
 function extractSubreddit(url) {
-    const match = url.match(/reddit\.com\/r\/([^\/]+)\/(comments|s)\//i);
-    if (match) return match[1];
+    // Remove any trailing slashes and whitespace
+    url = url.trim().replace(/\/+$/, '');
+    
+    // Try multiple patterns to extract subreddit
+    const patterns = [
+        /reddit\.com\/r\/([^\/\?&#]+)/i,  // Matches /r/subreddit in any context
+        /\/r\/([^\/\?&#]+)/i              // Fallback for relative URLs
+    ];
+    
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+    
     return null;
+}
+
+// NEW: Resolve short links by fetching through proxy to get final URL
+async function resolveShortLink(shortUrl) {
+    const proxies = [
+        'https://api.codetabs.com/v1/proxy?quest=',
+        'https://corsproxy.io/?',
+        'https://cors.x2u.in/'
+    ];
+    
+    for (const proxy of proxies) {
+        try {
+            const url = proxy + encodeURIComponent(shortUrl + '.json');
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                // Reddit API returns post data, extract permalink
+                if (data && data[0] && data[0].data && data[0].data.children && data[0].data.children[0]) {
+                    const permalink = data[0].data.children[0].data.permalink;
+                    return 'https://www.reddit.com' + permalink;
+                }
+            }
+        } catch (e) {
+            console.log('Proxy failed:', proxy, e);
+        }
+    }
+    
+    // If resolution fails, return original URL
+    return shortUrl;
 }
 
 async function loadPosts() {
@@ -528,13 +572,23 @@ async function loadPosts() {
     for (let i = 0; i < urls.length; i++) {
         const originalUrl = urls[i];
         status.textContent = `Processing ${i+1}/${urls.length}${forceMode ? ' (FORCE MODE)' : ''}…`;
-        const subreddit = extractSubreddit(originalUrl);
+        
+        // FIXED: Resolve short links first if needed
+        let resolvedUrl = originalUrl;
+        if (originalUrl.includes('/s/')) {
+            status.textContent = `Resolving short link ${i+1}/${urls.length}…`;
+            resolvedUrl = await resolveShortLink(originalUrl);
+            await new Promise(r => setTimeout(r, 500)); // Small delay between resolutions
+        }
+        
+        const subreddit = extractSubreddit(resolvedUrl);
 
         if (!subreddit) {
             container.innerHTML += `
                 <div class="post">
                     <div class="main-line">
                         <div><strong>❌ No subreddit found</strong>
+                        <div class="meta">Could not extract subreddit from URL</div>
                         <div class="meta"><a href="${originalUrl}" target="_blank">${originalUrl}</a></div>
                         </div>
                     </div>
