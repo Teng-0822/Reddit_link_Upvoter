@@ -504,7 +504,6 @@ Works with both shortlinks and full URLs!" autofocus></textarea>
 <script>
 const allNeededNumbers = [];
 
-// FIXED: Better subreddit extraction that handles more URL formats
 function extractSubreddit(url) {
     url = url.trim().replace(/\/+$/, '');
     
@@ -523,23 +522,28 @@ function extractSubreddit(url) {
     return null;
 }
 
-// NEW: Check if URL is a shortlink
 function isShortLink(url) {
     return url.includes('/s/');
 }
 
-// NEW: Resolve short links by fetching through proxy to get final URL
 async function resolveShortLink(shortUrl) {
+    // EXPANDED: More CORS proxies with better success rate
     const proxies = [
-        'https://api.codetabs.com/v1/proxy?quest=',
+        'https://api.allorigins.win/raw?url=',
         'https://corsproxy.io/?',
-        'https://cors.x2u.in/'
+        'https://api.codetabs.com/v1/proxy?quest=',
+        'https://cors-anywhere.herokuapp.com/',
+        'https://thingproxy.freeboard.io/fetch/'
     ];
     
     for (const proxy of proxies) {
         try {
             const url = proxy + encodeURIComponent(shortUrl + '.json');
-            const res = await fetch(url);
+            const res = await fetch(url, { 
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+                timeout: 8000 
+            });
+            
             if (res.ok) {
                 const data = await res.json();
                 if (data && data[0] && data[0].data && data[0].data.children && data[0].data.children[0]) {
@@ -548,7 +552,7 @@ async function resolveShortLink(shortUrl) {
                 }
             }
         } catch (e) {
-            console.log('Proxy failed:', proxy, e);
+            console.log('Proxy failed:', proxy, e.message);
         }
     }
     
@@ -575,7 +579,6 @@ async function loadPosts() {
         const originalUrl = urls[i];
         status.textContent = `Processing ${i+1}/${urls.length}${forceMode ? ' (FORCE MODE)' : ''}…`;
         
-        // FIXED: Only resolve if it's actually a shortlink
         let resolvedUrl = originalUrl;
         if (isShortLink(originalUrl)) {
             status.textContent = `Resolving short link ${i+1}/${urls.length}…`;
@@ -603,7 +606,6 @@ async function loadPosts() {
         const div = document.createElement('div');
         div.className = 'post';
         
-        // FIXED: Show different labels for shortlinks vs full URLs
         const linkType = isShortLink(originalUrl) ? 'short link' : 'post URL';
         const linkLabel = isShortLink(originalUrl) ? 'Short link:' : 'Post URL:';
         
@@ -662,7 +664,7 @@ async function loadPosts() {
             }
         }
 
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 1200));
     }
 
     if (allNeededNumbers.length > 0) {
@@ -685,32 +687,54 @@ function copyAllTargets() {
 }
 
 async function getSmartNeed(subreddit, forceMode = false) {
+    // EXPANDED: More reliable CORS proxies + Reddit alternatives
     const proxies = [
-        'https://api.codetabs.com/v1/proxy?quest=',
+        'https://api.allorigins.win/raw?url=',
         'https://corsproxy.io/?',
-        'https://cors.x2u.in/'
+        'https://api.codetabs.com/v1/proxy?quest=',
+        'https://thingproxy.freeboard.io/fetch/',
+        ''  // Direct attempt (sometimes works)
     ];
 
     const baseUrls = [
         `https://www.reddit.com/r/${subreddit}/hot/.json?limit=25&raw_json=1`,
-        `https://old.reddit.com/r/${subreddit}/hot/.json?limit=25`
+        `https://old.reddit.com/r/${subreddit}/hot/.json?limit=25&raw_json=1`,
+        `https://oauth.reddit.com/r/${subreddit}/hot/.json?limit=25&raw_json=1`
     ];
 
     for (const proxy of proxies) {
         for (const base of baseUrls) {
             try {
-                const url = proxy + encodeURIComponent(base);
-                const res = await fetch(url);
+                const url = proxy ? proxy + encodeURIComponent(base) : base;
+                const res = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                });
+                
                 if (res.ok) {
-                    const data = await res.json();
-                    return processHotData(data, forceMode);
+                    const text = await res.text();
+                    let data;
+                    
+                    try {
+                        data = JSON.parse(text);
+                    } catch (e) {
+                        console.log('JSON parse error:', e);
+                        continue;
+                    }
+                    
+                    if (data && data.data && data.data.children) {
+                        return processHotData(data, forceMode);
+                    }
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.log('Fetch error:', e.message);
+            }
         }
     }
 
     return {
-        topHTML: "<em>Failed — try again later or Reddit blocking</em>",
+        topHTML: "<em>Failed — Reddit API blocked. Try: (1) Use VPN, (2) Try later, or (3) Use browser extension</em>",
         needHTML: "Error",
         error: true
     };
@@ -728,13 +752,9 @@ function processHotData(data, forceMode = false) {
     const top5 = hotPosts.slice(0, 5);
     const topHTML = makeTopList(top5);
 
-    // FORCE MODE: Beat the #1 post + add buffer for longevity
     if (forceMode) {
         const topPost = hotPosts[0];
-        // Beat #1 by a margin + add 20% buffer to stay on top longer
         let needed = Math.ceil(topPost.score * 1.2) + 50;
-        
-        // Round up to nearest 10 for clean numbers
         needed = Math.ceil(needed / 10) * 10;
         
         return {
@@ -744,7 +764,6 @@ function processHotData(data, forceMode = false) {
         };
     }
 
-    // NORMAL MODE: Original logic
     const now = Date.now() / 1000;
     const TWENTY_FOUR_HOURS = 24 * 60 * 60;
 
