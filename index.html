@@ -468,13 +468,14 @@
     </header>
     
     <div class="search-card">
-        <textarea id="links" placeholder="Paste Reddit short links (one per line)
+        <textarea id="links" placeholder="Paste Reddit short links OR full post URLs (one per line)
 
 Examples:
 https://www.reddit.com/r/dressedhot/s/KWxuPi89Du
 https://reddit.com/r/sub/s/abc123
+https://www.reddit.com/r/subreddit/comments/abc123/post_title/
 
-Works with full links too!" autofocus></textarea>
+Works with both shortlinks and full URLs!" autofocus></textarea>
         
         <div class="checkbox-container">
             <input type="checkbox" id="forceMode" name="forceMode">
@@ -496,7 +497,7 @@ Works with full links too!" autofocus></textarea>
     <div class="posts" id="posts"></div>
     
     <div class="footer">
-        100% client-side • Copies your original short link • No post details needed
+        100% client-side • Copies your original link • Supports shortlinks & full URLs
     </div>
 </div>
 
@@ -505,13 +506,11 @@ const allNeededNumbers = [];
 
 // FIXED: Better subreddit extraction that handles more URL formats
 function extractSubreddit(url) {
-    // Remove any trailing slashes and whitespace
     url = url.trim().replace(/\/+$/, '');
     
-    // Try multiple patterns to extract subreddit
     const patterns = [
-        /reddit\.com\/r\/([^\/\?&#]+)/i,  // Matches /r/subreddit in any context
-        /\/r\/([^\/\?&#]+)/i              // Fallback for relative URLs
+        /reddit\.com\/r\/([^\/\?&#]+)/i,
+        /\/r\/([^\/\?&#]+)/i
     ];
     
     for (const pattern of patterns) {
@@ -522,6 +521,11 @@ function extractSubreddit(url) {
     }
     
     return null;
+}
+
+// NEW: Check if URL is a shortlink
+function isShortLink(url) {
+    return url.includes('/s/');
 }
 
 // NEW: Resolve short links by fetching through proxy to get final URL
@@ -538,7 +542,6 @@ async function resolveShortLink(shortUrl) {
             const res = await fetch(url);
             if (res.ok) {
                 const data = await res.json();
-                // Reddit API returns post data, extract permalink
                 if (data && data[0] && data[0].data && data[0].data.children && data[0].data.children[0]) {
                     const permalink = data[0].data.children[0].data.permalink;
                     return 'https://www.reddit.com' + permalink;
@@ -549,7 +552,6 @@ async function resolveShortLink(shortUrl) {
         }
     }
     
-    // If resolution fails, return original URL
     return shortUrl;
 }
 
@@ -573,12 +575,12 @@ async function loadPosts() {
         const originalUrl = urls[i];
         status.textContent = `Processing ${i+1}/${urls.length}${forceMode ? ' (FORCE MODE)' : ''}…`;
         
-        // FIXED: Resolve short links first if needed
+        // FIXED: Only resolve if it's actually a shortlink
         let resolvedUrl = originalUrl;
-        if (originalUrl.includes('/s/')) {
+        if (isShortLink(originalUrl)) {
             status.textContent = `Resolving short link ${i+1}/${urls.length}…`;
             resolvedUrl = await resolveShortLink(originalUrl);
-            await new Promise(r => setTimeout(r, 500)); // Small delay between resolutions
+            await new Promise(r => setTimeout(r, 500));
         }
         
         const subreddit = extractSubreddit(resolvedUrl);
@@ -600,12 +602,17 @@ async function loadPosts() {
 
         const div = document.createElement('div');
         div.className = 'post';
+        
+        // FIXED: Show different labels for shortlinks vs full URLs
+        const linkType = isShortLink(originalUrl) ? 'short link' : 'post URL';
+        const linkLabel = isShortLink(originalUrl) ? 'Short link:' : 'Post URL:';
+        
         div.innerHTML = `
             <div class="main-line" onclick="this.parentElement.querySelector('.dropdown').classList.toggle('open')">
                 <div style="flex:1;">
-                    <span class="title-link">/r/${subreddit} short link</span>
+                    <span class="title-link">/r/${subreddit} ${linkType}</span>
                     <div class="meta">Your original link</div>
-                    <div class="full-url">Short link: <a href="${originalUrl}" target="_blank">${originalUrl}</a></div>
+                    <div class="full-url">${linkLabel} <a href="${originalUrl}" target="_blank">${originalUrl}</a></div>
                     <div class="short-note">Target calculated from current hot posts in /r/${subreddit}${forceMode ? ' • FORCE MODE ACTIVE' : ''}</div>
                 </div>
                 <div class="actions-group">
